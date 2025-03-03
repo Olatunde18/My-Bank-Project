@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
     amount REAL NOT NULL,
+    sender_account TEXT DEFAULT NULL,
     recipient_account TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -138,67 +139,86 @@ def banking_menu(user_id):
 
 def check_balance(user_id):
     balance = cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    return f"Your balance: {balance:.2f}"
+    return f"Your balance: ₦{balance:.2f}"
 
 def deposit(user_id):
-    try:
-        amount = float(input("Enter deposit amount: "))
-        if amount <= 0:
-            print("Deposit must be greater than 0.")
-            return
-        cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
-        cursor.execute("INSERT INTO transactions (user_id, amount) VALUES (?, ?)", (user_id, amount))
-        conn.commit()
-        print("Deposit successful!")
-        time.sleep(1)
-    except ValueError:
-        print("Invalid amount.")
+    while True:
+        try:
+            amount = float(input("Enter deposit amount: "))
+
+            if amount <= 0:
+                print("Deposit must be greater than 0. Please enter a valid amount.")
+            else:
+                cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
+                cursor.execute("INSERT INTO transactions (user_id, amount) VALUES (?, ?)", (user_id, amount))
+                conn.commit()
+                print("Deposit successful!")
+                time.sleep(1)
+                return
+        except ValueError:
+            print("Invalid input. Please enter a numeric amount.")
+
 
 def withdraw(user_id):
-    try:
-        amount = float(input("Enter withdrawal amount: "))
-        balance = cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-        if amount <= 0:
-            print("Amount must be greater than 0.")
-        elif amount > balance:
-            print("Insufficient funds.")
-        else:
-            cursor.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
-            cursor.execute("INSERT INTO transactions (user_id, amount) VALUES (?, ?)", (user_id, -amount))
-            conn.commit()
-            print("Withdrawal successful!")
-            time.sleep(1)
-    except ValueError:
-        print("Invalid amount.")
+    while True:
+        try:
+            amount = float(input("Enter withdrawal amount: "))
+            balance = cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+
+            if amount <= 0:
+                print("Amount must be greater than 0. Please enter a valid amount.")
+            elif amount > balance:
+                print("Insufficient funds. Please enter a lower amount.")
+            else:
+                cursor.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
+                cursor.execute("INSERT INTO transactions (user_id, amount) VALUES (?, ?)", (user_id, -amount))
+                conn.commit()
+                print("Withdrawal successful!")
+                time.sleep(1)
+                return
+        except ValueError:
+            print("Invalid input. Please enter a numeric amount.")
+
 
 def transfer(user_id):
-    recipient_account = input("Enter recipient's account number: ").strip()
-    try:
-        amount = float(input("Enter transfer amount: "))
-        if amount <= 0:
-            print("Transfer amount must be greater than 0.")
-            return
-    except ValueError:
-        print("Invalid input. Please enter a numeric amount.")
-        return
+    while True:
+        user_account = cursor.execute("SELECT account_number FROM users WHERE id = ?", (user_id,)).fetchone()[0]
 
-    sender_balance = cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    recipient = cursor.execute("SELECT id FROM users WHERE account_number = ?", (recipient_account,)).fetchone()
-    
-    if recipient is None:
-        print("Recipient not found.")
-    elif amount > sender_balance:
-        print("Insufficient funds.")
-    else:
-        recipient_id = recipient[0]
-        cursor.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
-        cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, recipient_id))
-        cursor.execute("INSERT INTO transactions (user_id, amount, recipient_account) VALUES (?, ?, ?)", (user_id, -amount, recipient_account))
-        cursor.execute("INSERT INTO transactions (user_id, amount, recipient_account) VALUES (?, ?, ?)", (recipient_id, amount, recipient_account))
-        conn.commit()
-        print("Transfer successful!")
-        time.sleep(1)
+        while True:
+            recipient_account = input("Enter recipient's account number: ").strip()
+            if recipient_account == user_account:
+                print("You cannot transfer money to yourself. Please enter a valid recipient account.")
+            else:
+                break
 
+        while True:
+            try:
+                amount = float(input("Enter transfer amount: "))
+                if amount <= 0:
+                    print("Transfer amount must be greater than 0.")
+                else:
+                    break  
+            except ValueError:
+                print("Invalid input. Please enter a numeric amount.")
+
+        sender_balance = cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+
+        recipient = cursor.execute("SELECT id FROM users WHERE account_number = ?", (recipient_account,)).fetchone()
+
+        if recipient is None:
+            print("Recipient not found. Please enter a valid account number.")
+        elif amount > sender_balance:
+            print("Insufficient funds. Please enter a lower amount.")
+        else:
+            recipient_id = recipient[0]
+            cursor.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
+            cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, recipient_id))
+            cursor.execute("INSERT INTO transactions (user_id, amount, recipient_account) VALUES (?, ?, ?)", (user_id, -amount, recipient_account))
+            cursor.execute("INSERT INTO transactions (user_id, amount, recipient_account) VALUES (?, ?, ?)", (recipient_id, amount, recipient_account))
+            conn.commit()
+            print("Transfer successful!")
+            time.sleep(1)
+            return 
 
 def transaction_history(user_id):
     transactions = cursor.execute(
@@ -213,13 +233,11 @@ def transaction_history(user_id):
     else:
         for amount, sender, recipient, timestamp in transactions:
             if sender and sender != "Self":
-                print(f"{timestamp} - Received {amount:.2f} from {sender}")
+                print(f"{timestamp} - Received ₦{amount:.2f} from {sender}")
             elif recipient:
-                print(f"{timestamp} - Sent {amount:.2f} to {recipient}")
+                print(f"{timestamp} - Sent ₦{amount:.2f} to {recipient}")
             else:
-                print(f"{timestamp} - Deposit: {amount:.2f}")
-
-
+                print(f"{timestamp} - Deposit: ₦{amount:.2f}")
 
 def main_menu():
     while True:
