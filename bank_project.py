@@ -257,5 +257,6 @@ def main_menu():
             break
         else:
             print("Invalid choice. Please try again.")
+        break
 
 main_menu()
